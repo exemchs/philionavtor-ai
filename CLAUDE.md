@@ -2,6 +2,13 @@
 
 This file provides guidance to Claude Code when working with code in this repository.
 
+## Deployment
+
+- Vercel auto-deploys on push to `main`
+- Vercel project: `chs-ex-emcoms-projects/philionavtor-ai`
+- Production URL: https://philionavtor-ai.vercel.app
+- Manual deploy: `npx vercel --prod`
+
 ## Commands
 
 ```bash
