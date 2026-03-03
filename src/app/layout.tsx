@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "Philionavtor AI",
-  description: "Philionavtor AI Platform",
+  title: "EXEM AI - 일하는 방식이 바뀌고 있습니다",
+  description:
+    "2026년, AI는 선택이 아닌 기본 인프라가 되었습니다. EXEM이 그 변화의 중심에 서야 할 이유.",
+  openGraph: {
+    title: "EXEM AI - 일하는 방식이 바뀌고 있습니다",
+    description:
+      "2026년, AI는 선택이 아닌 기본 인프라가 되었습니다. EXEM이 그 변화의 중심에 서야 할 이유.",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
@@ -18,10 +19,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko">
-      <body className={`${geistSans.variable} antialiased`}>
-        {children}
-      </body>
+    <html lang="ko" data-theme="dark" suppressHydrationWarning>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

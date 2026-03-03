@@ -1,1 +1,199 @@
 @import "tailwindcss";
+
+@font-face {
+  font-family: "Pretendard";
+  src: url("/fonts/PretendardVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@theme inline {
+  --font-sans: "Pretendard", system-ui, -apple-system, sans-serif;
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+}
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --bg: #06060A;
+  --bg-elevated: #0C0C12;
+  --bg-card: #111118;
+  --bg-card-hover: #18181F;
+  --bg-glass: rgba(11, 11, 17, 0.8);
+
+  /* Text */
+  --text: #ECECEC;
+  --text-secondary: #A1A1AA;
+  --text-dim: #52525B;
+
+  /* Borders */
+  --border: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.12);
+
+  /* Accent - Monitoring Green */
+  --accent: #22C55E;
+  --accent-dim: rgba(34, 197, 94, 0.15);
+  --accent-glow: rgba(34, 197, 94, 0.08);
+
+  /* Data Colors */
+  --cyan: #22D3EE;
+  --cyan-dim: rgba(34, 211, 238, 0.15);
+  --amber: #F59E0B;
+  --amber-dim: rgba(245, 158, 11, 0.15);
+  --rose: #F43F5E;
+  --violet: #8B5CF6;
+  --violet-dim: rgba(139, 92, 246, 0.15);
+
+  /* Status */
+  --up: #22C55E;
+  --down: #EF4444;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #F8F8FA;
+  --bg-elevated: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F4F4F5;
+  --bg-glass: rgba(248, 248, 250, 0.85);
+
+  --text: #0A0A0F;
+  --text-secondary: #52525B;
+  --text-dim: #A1A1AA;
+
+  --border: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.15);
+
+  --accent: #16A34A;
+  --accent-dim: rgba(22, 163, 74, 0.1);
+  --accent-glow: rgba(22, 163, 74, 0.05);
+
+  --cyan: #0891B2;
+  --cyan-dim: rgba(8, 145, 178, 0.1);
+  --amber: #D97706;
+  --amber-dim: rgba(217, 119, 6, 0.1);
+  --rose: #E11D48;
+  --violet: #7C3AED;
+  --violet-dim: rgba(124, 58, 237, 0.1);
+
+  --up: #16A34A;
+  --down: #DC2626;
+}
+
+/* ── Base ── */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: "Pretendard", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* ── Animations ── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes grid-pulse {
+  0%, 100% { opacity: 0.03; }
+  50% { opacity: 0.06; }
+}
+
+@keyframes sparkline-draw {
+  from { stroke-dashoffset: 200; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes scroll-hint {
+  0%, 100% { transform: translateY(0); opacity: 0.6; }
+  50% { transform: translateY(8px); opacity: 1; }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-scroll-hint {
+  animation: scroll-hint 2s ease-in-out infinite;
+}
+
+.sparkline-animate {
+  stroke-dasharray: 200;
+  stroke-dashoffset: 200;
+  animation: sparkline-draw 1.5s ease-out forwards;
+}
+
+/* ── Grid Background ── */
+.grid-bg {
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 60px 60px;
+  animation: grid-pulse 4s ease-in-out infinite;
+}
+
+/* ── Dashboard Card ── */
+.dashboard-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.dashboard-card:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-card-hover);
+}
+
+/* ── Glass Effect ── */
+.glass {
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--text-dim);
+  border-radius: 3px;
+}
