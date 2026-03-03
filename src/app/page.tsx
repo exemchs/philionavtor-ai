@@ -179,7 +179,7 @@ function Nav({ theme, onToggle }: { theme: string; onToggle: () => void }) {
   }, []);
   return (
     <header className={cn("fixed top-0 inset-x-0 z-50 transition-all duration-300", scrolled && "glass-nav")}>
-      <div className="mx-auto max-w-[1120px] px-6 h-14 flex items-center justify-between">
+      <div className="mx-auto max-w-[1120px] px-6 sm:px-8 h-14 flex items-center justify-between">
         <Image
           src={theme === "dark" ? "/logos/Exem_logo_white.svg" : "/logos/Exem_logo_black.svg"}
           alt="EXEM" width={72} height={20} className="h-[18px] w-auto"
@@ -202,7 +202,7 @@ function Nav({ theme, onToggle }: { theme: string; onToggle: () => void }) {
    ══════════════════════════════════════════════ */
 function Hero() {
   return (
-    <section className="relative min-h-[100svh] flex items-center justify-center overflow-hidden" style={{ background: "var(--bg-0)" }}>
+    <section className="relative min-h-[100svh] flex flex-col items-center justify-center overflow-hidden" style={{ background: "var(--bg-0)" }}>
       {/* gradient orbs */}
       <div className="pointer-events-none absolute inset-0">
         <div
@@ -215,7 +215,7 @@ function Hero() {
         />
       </div>
 
-      <div className="relative z-10 mx-auto max-w-3xl px-6 text-center pt-14">
+      <div className="relative z-10 mx-auto max-w-3xl px-8 text-center">
         <Reveal>
           <span
             className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-[13px] font-medium"
@@ -249,12 +249,15 @@ function Hero() {
         </Reveal>
 
         <Reveal delay={0.36}>
-          <div className="mt-20 flex flex-col items-center gap-1" style={{ color: "var(--text-3)", animation: "scroll-bounce 2.4s ease-in-out infinite" }}>
+          <div className="mt-16 flex flex-col items-center gap-1" style={{ color: "var(--text-3)", animation: "scroll-bounce 2.4s ease-in-out infinite" }}>
             <span className="text-[11px] tracking-[.15em] uppercase">Scroll</span>
             <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 5l6 6 6-6" /></svg>
           </div>
         </Reveal>
       </div>
+
+      {/* bottom fade-out gradient for smooth transition */}
+      <div className="absolute bottom-0 inset-x-0 h-32 pointer-events-none" style={{ background: "linear-gradient(to bottom, transparent, var(--bg-1))" }} />
     </section>
   );
 }
@@ -267,8 +270,7 @@ function MetricCard({ m, i }: { m: (typeof METRICS)[0]; i: number }) {
   return (
     <Reveal delay={i * 0.06} className="h-full">
       <div
-        className="relative h-full rounded-xl p-5 flex flex-col gap-4 overflow-hidden transition-colors"
-        style={{ background: "var(--bg-2)", border: "1px solid var(--border-0)" }}
+        className="relative h-full p-5 sm:p-6 flex flex-col gap-3 overflow-hidden transition-colors"
       >
         {/* top row: delta + sparkline */}
         <div className="flex items-center justify-between">
@@ -291,7 +293,7 @@ function MetricCard({ m, i }: { m: (typeof METRICS)[0]; i: number }) {
         </div>
 
         {/* colored left accent */}
-        <div className="absolute left-0 top-4 bottom-4 w-[3px] rounded-r-full" style={{ background: m.color, opacity: 0.5 }} />
+        <div className="absolute left-0 top-5 bottom-5 w-[3px] rounded-r-full" style={{ background: m.color, opacity: 0.4 }} />
       </div>
     </Reveal>
   );
@@ -302,7 +304,7 @@ function MetricCard({ m, i }: { m: (typeof METRICS)[0]; i: number }) {
    ══════════════════════════════════════════════ */
 function Trends() {
   return (
-    <section className="section-alt py-20 sm:py-28 px-6">
+    <section className="section-alt py-16 sm:py-24 px-6 sm:px-8">
       <div className="mx-auto max-w-[1120px]">
         <Reveal>
           <div className="flex flex-wrap items-center gap-3 mb-2">
@@ -338,12 +340,10 @@ function Trends() {
           </div>
 
           {/* cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[1px]" style={{ background: "var(--border-0)" }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px" style={{ background: "var(--border-0)" }}>
             {METRICS.map((m, i) => (
               <div key={m.label} style={{ background: "var(--bg-0)" }}>
-                <div className="p-1">
-                  <MetricCard m={m} i={i} />
-                </div>
+                <MetricCard m={m} i={i} />
               </div>
             ))}
           </div>
@@ -370,7 +370,7 @@ function Position() {
   ];
 
   return (
-    <section className="py-20 sm:py-28 px-6" style={{ background: "var(--bg-0)" }}>
+    <section className="py-20 sm:py-32 px-6 sm:px-8" style={{ background: "var(--bg-0)" }}>
       <div className="mx-auto max-w-[1120px]">
         <Reveal>
           <p className="text-[13px] font-semibold tracking-wider uppercase" style={{ color: "var(--green)" }}>EXEM&apos;s Position</p>
@@ -466,7 +466,7 @@ function MockupLine({ l }: { l: { t: string; v: string } }) {
 function ClaudeCode() {
   const [tab, setTab] = useState(0);
   return (
-    <section className="section-alt py-20 sm:py-28 px-6">
+    <section className="section-alt py-20 sm:py-32 px-6 sm:px-8">
       <div className="mx-auto max-w-[1120px]">
         <Reveal>
           <p className="text-[13px] font-semibold tracking-wider uppercase" style={{ color: "var(--cyan)" }}>Claude Code</p>
@@ -524,7 +524,7 @@ function ClaudeCode() {
               </div>
 
               {/* content */}
-              <div className="p-6 sm:p-8">
+              <div className="p-5 sm:p-8">
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={tab}
@@ -532,10 +532,31 @@ function ClaudeCode() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
                     transition={{ duration: 0.25 }}
+                    className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6"
                   >
-                    <p className="text-xs font-medium mb-5" style={{ color: "var(--text-2)" }}>{CASES[tab].title}</p>
-                    <div className="rounded-lg p-5" style={{ background: "var(--bg-1)", border: "1px solid var(--border-0)" }}>
-                      {CASES[tab].lines.map((l, i) => <MockupLine key={i} l={l} />)}
+                    <div>
+                      <p className="text-xs font-medium mb-4" style={{ color: "var(--text-2)" }}>{CASES[tab].title}</p>
+                      <div className="rounded-lg p-5 sm:p-6" style={{ background: "var(--bg-1)", border: "1px solid var(--border-0)" }}>
+                        {CASES[tab].lines.map((l, i) => <MockupLine key={i} l={l} />)}
+                      </div>
+                    </div>
+                    <div className="hidden lg:flex flex-col justify-center gap-4 py-4">
+                      <div className="rounded-lg p-4" style={{ background: "var(--bg-1)", border: "1px solid var(--border-0)" }}>
+                        <p className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-2)" }}>처리 시간</p>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-2xl font-bold" style={{ color: "var(--green)" }}>
+                            {tab === 0 ? "3분" : tab === 1 ? "즉시" : "3분"}
+                          </span>
+                        </div>
+                        <p className="text-[11px] mt-1" style={{ color: "var(--text-2)" }}>
+                          {tab === 0 ? "1시간 회의 기준" : tab === 1 ? "데이터 업로드 후" : "매주 월요일 자동 실행"}
+                        </p>
+                      </div>
+                      <div className="rounded-lg p-4" style={{ background: "var(--bg-1)", border: "1px solid var(--border-0)" }}>
+                        <p className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-2)" }}>필요한 기술</p>
+                        <p className="text-sm font-medium" style={{ color: "var(--green)" }}>한국어 대화</p>
+                        <p className="text-[11px] mt-1" style={{ color: "var(--text-2)" }}>코딩 지식 불필요</p>
+                      </div>
                     </div>
                   </motion.div>
                 </AnimatePresence>
@@ -557,7 +578,7 @@ function ClaudeCode() {
    ══════════════════════════════════════════════ */
 function Curriculum() {
   return (
-    <section className="py-20 sm:py-28 px-6" style={{ background: "var(--bg-0)" }}>
+    <section className="py-20 sm:py-28 px-6 sm:px-8" style={{ background: "var(--bg-0)" }}>
       <div className="mx-auto max-w-[1120px] text-center">
         <Reveal>
           <p className="text-[13px] font-semibold tracking-wider uppercase" style={{ color: "var(--green)" }}>EXEM AI Curriculum</p>
@@ -629,7 +650,7 @@ function Curriculum() {
    ══════════════════════════════════════════════ */
 function Closing({ theme }: { theme: string }) {
   return (
-    <section className="relative py-24 sm:py-32 px-6 overflow-hidden" style={{ background: "var(--bg-0)" }}>
+    <section className="relative py-28 sm:py-40 px-6 sm:px-8 overflow-hidden" style={{ background: "var(--bg-0)" }}>
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute w-[600px] h-[300px] rounded-full blur-[140px] opacity-[.08] left-1/2 bottom-0 -translate-x-1/2" style={{ background: "var(--green)" }} />
       </div>
