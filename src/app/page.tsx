@@ -1,113 +1,66 @@
 "use client";
 
-import {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  type ReactNode,
-} from "react";
-import {
-  motion,
-  AnimatePresence,
-  useInView,
-} from "framer-motion";
+import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
+import { motion, AnimatePresence, useInView } from "framer-motion";
 import Image from "next/image";
 
-/* ═══════════════════════════════════════════
-   UTILS
-   ═══════════════════════════════════════════ */
-
-function cn(...classes: (string | false | null | undefined)[]) {
-  return classes.filter(Boolean).join(" ");
+/* ── helpers ── */
+function cn(...c: (string | false | null | undefined)[]) {
+  return c.filter(Boolean).join(" ");
 }
 
-/* ═══════════════════════════════════════════
-   HOOKS
-   ═══════════════════════════════════════════ */
-
-function useCountUp(target: number, duration = 2000, decimals = 0) {
-  const [value, setValue] = useState(0);
+/* ── hooks ── */
+function useCountUp(end: number, ms = 2000) {
+  const [v, setV] = useState(0);
   const ref = useRef<HTMLSpanElement>(null);
-  const hasAnimated = useRef(false);
-
+  const ran = useRef(false);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !hasAnimated.current) {
-          hasAnimated.current = true;
-          const start = performance.now();
-          const animate = (now: number) => {
-            const elapsed = now - start;
-            const progress = Math.min(elapsed / duration, 1);
-            const eased = 1 - Math.pow(1 - progress, 3);
-            setValue(Number((eased * target).toFixed(decimals)));
-            if (progress < 1) requestAnimationFrame(animate);
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting && !ran.current) {
+          ran.current = true;
+          const t0 = performance.now();
+          const tick = (now: number) => {
+            const p = Math.min((now - t0) / ms, 1);
+            setV(Math.round((1 - Math.pow(1 - p, 3)) * end));
+            if (p < 1) requestAnimationFrame(tick);
           };
-          requestAnimationFrame(animate);
+          requestAnimationFrame(tick);
         }
       },
-      { threshold: 0.3 }
+      { threshold: 0.2 }
     );
-
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [target, duration, decimals]);
-
-  return { ref, value };
+    io.observe(el);
+    return () => io.disconnect();
+  }, [end, ms]);
+  return { ref, v };
 }
 
 function useTheme() {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
-
+  const [t, setT] = useState<"dark" | "light">("dark");
   useEffect(() => {
-    const stored = localStorage.getItem("theme");
-    if (stored === "light" || stored === "dark") {
-      setTheme(stored);
-    } else {
-      const prefersDark = window.matchMedia(
-        "(prefers-color-scheme: dark)"
-      ).matches;
-      setTheme(prefersDark ? "dark" : "light");
-    }
+    const s = localStorage.getItem("theme");
+    if (s === "light" || s === "dark") setT(s);
+    else setT(window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
   }, []);
-
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("theme", theme);
-  }, [theme]);
-
-  const toggle = useCallback(() => {
-    setTheme((t) => (t === "dark" ? "light" : "dark"));
-  }, []);
-
-  return { theme, toggle };
+    document.documentElement.setAttribute("data-theme", t);
+    localStorage.setItem("theme", t);
+  }, [t]);
+  const toggle = useCallback(() => setT((p) => (p === "dark" ? "light" : "dark")), []);
+  return { theme: t, toggle };
 }
 
-/* ═══════════════════════════════════════════
-   SHARED COMPONENTS
-   ═══════════════════════════════════════════ */
-
-function FadeIn({
-  children,
-  delay = 0,
-  className,
-  y = 24,
-}: {
-  children: ReactNode;
-  delay?: number;
-  className?: string;
-  y?: number;
-}) {
+/* ── animation wrapper ── */
+function Reveal({ children, delay = 0, className }: { children: ReactNode; delay?: number; className?: string }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y }}
+      initial={{ opacity: 0, y: 32 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-60px" }}
-      transition={{ duration: 0.6, delay, ease: [0.16, 1, 0.3, 1] }}
+      viewport={{ once: true, margin: "-80px" }}
+      transition={{ duration: 0.7, delay, ease: [0.25, 1, 0.5, 1] }}
       className={className}
     >
       {children}
@@ -115,1029 +68,616 @@ function FadeIn({
   );
 }
 
-function Sparkline({
-  data,
-  color,
-  width = 80,
-  height = 32,
-  className,
-}: {
-  data: number[];
-  color: string;
-  width?: number;
-  height?: number;
-  className?: string;
-}) {
+/* ── sparkline ── */
+function Spark({ data, color, w = 72, h = 28 }: { data: number[]; color: string; w?: number; h?: number }) {
   const ref = useRef<SVGSVGElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-40px" });
-
-  const max = Math.max(...data);
-  const min = Math.min(...data);
-  const range = max - min || 1;
-  const pointsArr = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * width;
-    const y = height - ((v - min) / range) * (height - 4) - 2;
-    return { x, y };
-  });
-
-  const path =
-    "M " + pointsArr.map((p) => `${p.x},${p.y}`).join(" L ");
-
+  const visible = useInView(ref, { once: true });
+  const mn = Math.min(...data), mx = Math.max(...data), r = mx - mn || 1;
+  const pts = data.map((v, i) => ({ x: (i / (data.length - 1)) * w, y: h - 2 - ((v - mn) / r) * (h - 4) }));
+  const d = "M" + pts.map((p) => `${p.x} ${p.y}`).join("L");
+  const uid = `sp-${color.replace(/[^a-z0-9]/gi, "")}`;
   return (
-    <svg
-      ref={ref}
-      width={width}
-      height={height}
-      className={className}
-      viewBox={`0 0 ${width} ${height}`}
-      fill="none"
-    >
+    <svg ref={ref} width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" className="shrink-0">
       <defs>
-        <linearGradient
-          id={`grad-${color.replace(/[^a-zA-Z0-9]/g, "")}`}
-          x1="0"
-          y1="0"
-          x2="0"
-          y2="1"
-        >
-          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+        <linearGradient id={uid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity=".25" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
-      <path
-        d={`${path} L ${width},${height} L 0,${height} Z`}
-        fill={`url(#grad-${color.replace(/[^a-zA-Z0-9]/g, "")})`}
-        opacity={inView ? 1 : 0}
-        style={{ transition: "opacity 0.8s ease" }}
-      />
-      <path
-        d={path}
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={inView ? "sparkline-animate" : ""}
-        style={inView ? {} : { opacity: 0 }}
-      />
+      {visible && (
+        <>
+          <path d={`${d}L${w} ${h}L0 ${h}Z`} fill={`url(#${uid})`} />
+          <path d={d} stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="sparkline-draw" />
+        </>
+      )}
     </svg>
   );
 }
 
-/* ═══════════════════════════════════════════
+/* ══════════════════════════════════════════════
    DATA
-   ═══════════════════════════════════════════ */
-
+   ══════════════════════════════════════════════ */
 const METRICS = [
-  {
-    value: 2900,
-    suffix: "만",
-    label: "Claude Code 일일 설치",
-    sub: "1,770만에서 64% 증가",
-    change: "+64%",
-    color: "var(--accent)",
-    sparkData: [4, 5, 5, 6, 7, 8, 10, 12, 15, 17, 21, 25, 29],
-  },
-  {
-    value: 80,
-    suffix: "%",
-    label: "업무 시간 단축",
-    sub: "AI 도구 활용 시 평균 단축율",
-    change: "최대",
-    color: "var(--cyan)",
-    sparkData: [20, 30, 35, 42, 50, 55, 60, 65, 68, 72, 75, 78, 80],
-  },
-  {
-    value: 4,
-    suffix: "%",
-    label: "GitHub 커밋 중 AI 생성",
-    sub: "2026년 말 20%+ 전망",
-    change: "→ 20%+",
-    color: "var(--amber)",
-    sparkData: [0.2, 0.3, 0.5, 0.7, 1, 1.2, 1.5, 2, 2.5, 3, 3.2, 3.6, 4],
-  },
-  {
-    value: 8,
-    suffix: "/10",
-    label: "Fortune 10 기업 Claude 고객",
-    sub: "세계 최대 기업이 선택한 AI",
-    change: "80%",
-    color: "var(--violet)",
-    sparkData: [2, 3, 3, 4, 5, 5, 6, 6, 7, 7, 8, 8, 8],
-  },
-  {
-    value: 50,
-    suffix: "%+",
-    label: "비개발자 AI 사용 비율",
-    sub: "Epic 社 Claude Code 사용자 중",
-    change: "과반",
-    color: "var(--accent)",
-    sparkData: [10, 15, 18, 22, 28, 30, 35, 38, 42, 45, 47, 50, 52],
-  },
-  {
-    value: 35,
-    suffix: "만+",
-    label: "글로벌 기업 AI 도입 인원",
-    sub: "Cognizant 35만, Accenture 3만",
-    change: "확산",
-    color: "var(--cyan)",
-    sparkData: [2, 3, 5, 8, 10, 12, 15, 18, 22, 26, 30, 33, 35],
-  },
+  { value: 2900, unit: "만", label: "Claude Code 일일 설치", delta: "+64%", note: "VS Code 기준, 2026.02", color: "var(--green)", soft: "var(--green-soft)", spark: [4, 5, 6, 7, 8, 10, 12, 15, 17, 21, 25, 29] },
+  { value: 80, unit: "%", label: "업무 시간 단축", delta: "최대", note: "Anthropic 내부 연구 기준", color: "var(--cyan)", soft: "var(--cyan-soft)", spark: [20, 30, 42, 50, 55, 60, 65, 72, 75, 78, 80, 80] },
+  { value: 4, unit: "%", label: "GitHub 커밋 중 AI 생성", delta: "→20%+", note: "2026년 말 전망", color: "var(--amber)", soft: "var(--amber-soft)", spark: [0.2, 0.5, 0.7, 1, 1.5, 2, 2.5, 3, 3.2, 3.6, 4, 4] },
+  { value: 8, unit: "/10", label: "Fortune 10 기업이 Claude 사용", delta: "80%", note: "세계 최대 기업이 선택", color: "var(--violet)", soft: "var(--violet-soft)", spark: [2, 3, 4, 5, 5, 6, 6, 7, 7, 8, 8, 8] },
+  { value: 50, unit: "%+", label: "비개발직군 AI 사용", delta: "과반", note: "Epic 社 Claude Code 사용자 중", color: "var(--green)", soft: "var(--green-soft)", spark: [10, 15, 22, 28, 30, 35, 42, 45, 47, 50, 52, 52] },
+  { value: 35, unit: "만+", label: "글로벌 기업 도입 인원", delta: "확산", note: "Cognizant 35만 · Accenture 3만", color: "var(--cyan)", soft: "var(--cyan-soft)", spark: [2, 5, 8, 10, 15, 18, 22, 26, 30, 33, 35, 35] },
 ];
 
-const USE_CASES = [
+const CASES = [
   {
-    title: "회의록 자동 정리",
-    desc: "1시간 회의 → 3분 만에 핵심 요약 완성",
-    icon: "📋",
-    mockup: [
-      "EXEM CX그룹 주간회의 요약",
-      "━━━━━━━━━━━━━━━━━━━━━━━",
-      "",
-      "📅 2026년 3월 3일 (월) 10:00-11:00",
-      "👥 참석: CX그룹 전원 (12명)",
-      "",
-      "▸ 핵심 결정사항",
-      "  1. AI 커리큘럼 전사 배포 — 3/10(월)",
-      "  2. 파일럿 팀 피드백 반영 완료",
-      "  3. 신규 고객사 온보딩 프로세스 개선안 확정",
-      "",
-      "▸ 액션 아이템",
-      "  • 김OO: 교육 자료 최종 검토 (D-3)",
-      "  • 이OO: 온보딩 가이드 업데이트 (D-5)",
-      "  • 박OO: 고객 피드백 대시보드 구성 (D-7)",
-      "",
-      "▸ 다음 회의: 3/10 10:00",
+    tab: "회의록 정리", icon: "📋",
+    title: "1시간 회의 → 3분 요약",
+    lines: [
+      { t: "title", v: "CX그룹 주간회의 요약" },
+      { t: "meta", v: "2026.03.03 (월) 10:00 · 참석 12명" },
+      { t: "head", v: "핵심 결정사항" },
+      { t: "item", v: "AI 커리큘럼 전사 배포 일정 확정 — 3/10(월)" },
+      { t: "item", v: "파일럿 팀 피드백 반영 완료" },
+      { t: "item", v: "신규 고객사 온보딩 프로세스 개선안 확정" },
+      { t: "head", v: "액션 아이템" },
+      { t: "item", v: "김OO — 교육 자료 최종 검토 (D-3)" },
+      { t: "item", v: "이OO — 온보딩 가이드 업데이트 (D-5)" },
+      { t: "item", v: "박OO — 고객 피드백 대시보드 구성 (D-7)" },
     ],
   },
   {
-    title: "데이터 분석 보고서",
-    desc: "복잡한 데이터 → 인사이트 자동 추출",
-    icon: "📊",
-    mockup: [
-      "2월 고객 이탈 분석 보고서",
-      "━━━━━━━━━━━━━━━━━━━━━━━",
-      "",
-      "▸ 요약",
-      "  이탈률 12.3% → 8.7% (전월 대비 29% 개선)",
-      "",
-      "▸ 주요 발견",
-      "  1. 온보딩 30일 이내 이탈이 전체의 67%",
-      "  2. 기술 지원 응답 시간과 이탈률 상관계수 0.82",
-      "  3. 교육 프로그램 참여 고객 이탈률 3.1%",
-      "",
-      "▸ 권장 조치",
-      "  • 온보딩 첫 주 집중 케어 프로그램 도입",
-      "  • 기술 지원 응답 목표: 4시간 → 2시간",
-      "  • 분기별 고객 교육 세션 확대",
-      "",
-      "▸ 예상 효과: 이탈률 5% 이하 달성 가능",
+    tab: "데이터 분석", icon: "📊",
+    title: "복잡한 데이터 → 인사이트 추출",
+    lines: [
+      { t: "title", v: "2월 고객 이탈 분석 보고서" },
+      { t: "meta", v: "분석 기간: 2026.02.01 — 02.28" },
+      { t: "head", v: "요약" },
+      { t: "highlight", v: "이탈률 12.3% → 8.7% (29% 개선)" },
+      { t: "head", v: "주요 발견" },
+      { t: "item", v: "온보딩 30일 이내 이탈이 전체의 67%" },
+      { t: "item", v: "기술지원 응답 시간과 이탈률 상관계수 0.82" },
+      { t: "item", v: "교육 참여 고객 이탈률 3.1%" },
+      { t: "head", v: "권장 조치" },
+      { t: "item", v: "온보딩 첫 주 집중 케어 프로그램 도입" },
+      { t: "item", v: "기술지원 응답 목표 4h → 2h" },
     ],
   },
   {
-    title: "업무 프로세스 자동화",
-    desc: "반복 업무 → 자동 처리 워크플로우",
-    icon: "⚡",
-    mockup: [
-      "주간 리포트 자동화 완료",
-      "━━━━━━━━━━━━━━━━━━━━━━━",
-      "",
-      "▸ 자동화된 작업",
-      "  ✅ Notion 주간 회의록 수집 (12건)",
-      "  ✅ ClickUp 태스크 진행률 집계",
-      "  ✅ 팀별 KPI 달성률 계산",
-      "  ✅ 주간 요약 보고서 생성",
-      "  ✅ Mattermost 팀 채널 공유",
-      "",
-      "▸ 절감 시간",
-      "  기존: 매주 3시간 수작업",
-      "  현재: 자동 실행 (3분)",
-      "",
-      "▸ 다음 실행: 3/10(월) 09:00",
-      "",
-      "  ─ 98% 시간 절감 ─",
+    tab: "업무 자동화", icon: "⚡",
+    title: "반복 업무 → 자동 워크플로우",
+    lines: [
+      { t: "title", v: "주간 리포트 자동화" },
+      { t: "meta", v: "마지막 실행: 2026.03.03 09:00" },
+      { t: "head", v: "자동 처리 완료" },
+      { t: "check", v: "Notion 주간 회의록 수집 (12건)" },
+      { t: "check", v: "태스크 진행률 집계" },
+      { t: "check", v: "팀별 KPI 달성률 계산" },
+      { t: "check", v: "주간 요약 보고서 생성" },
+      { t: "check", v: "Mattermost 팀 채널 공유" },
+      { t: "head", v: "절감 효과" },
+      { t: "highlight", v: "매주 3시간 → 3분 (98% 절감)" },
     ],
   },
 ];
 
-/* ═══════════════════════════════════════════
+const DAYS = [
+  { n: 0, label: "오리엔테이션", time: "~5분" },
+  { n: 1, label: "AI에게 잘 시키는 법", time: "~60분" },
+  { n: 2, label: "내 업무를 AI로", time: "~60분" },
+  { n: 3, label: "도구 연결하기", time: "~60분" },
+  { n: 4, label: "자동화하기", time: "~60분" },
+  { n: 5, label: "졸업 프로젝트", time: "~60분" },
+];
+
+/* ══════════════════════════════════════════════
    NAV
-   ═══════════════════════════════════════════ */
-
+   ══════════════════════════════════════════════ */
 function Nav({ theme, onToggle }: { theme: string; onToggle: () => void }) {
   const [scrolled, setScrolled] = useState(false);
-
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 40);
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+    const fn = () => setScrolled(window.scrollY > 48);
+    window.addEventListener("scroll", fn, { passive: true });
+    return () => window.removeEventListener("scroll", fn);
   }, []);
-
   return (
-    <nav
-      className={cn(
-        "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
-        scrolled ? "glass border-b py-3" : "py-5"
-      )}
-      style={{ borderColor: scrolled ? "var(--border)" : "transparent" }}
-    >
-      <div className="max-w-6xl mx-auto px-6 flex items-center justify-between">
+    <header className={cn("fixed top-0 inset-x-0 z-50 transition-all duration-300", scrolled && "glass-nav")}>
+      <div className="mx-auto max-w-[1120px] px-6 h-14 flex items-center justify-between">
         <Image
-          src={
-            theme === "dark"
-              ? "/logos/Exem_logo_white.svg"
-              : "/logos/Exem_logo_black.svg"
-          }
-          alt="EXEM"
-          width={80}
-          height={24}
-          className="h-5 w-auto"
+          src={theme === "dark" ? "/logos/Exem_logo_white.svg" : "/logos/Exem_logo_black.svg"}
+          alt="EXEM" width={72} height={20} className="h-[18px] w-auto"
         />
-
         <button
           onClick={onToggle}
-          className="w-9 h-9 rounded-full flex items-center justify-center transition-colors cursor-pointer"
-          style={{
-            background: "var(--bg-card)",
-            border: "1px solid var(--border)",
-          }}
           aria-label="테마 전환"
+          className="w-8 h-8 rounded-lg grid place-items-center text-sm cursor-pointer transition-colors"
+          style={{ background: "var(--bg-2)", border: "1px solid var(--border-0)" }}
         >
-          <span className="text-sm">
-            {theme === "dark" ? "☀️" : "🌙"}
-          </span>
+          {theme === "dark" ? "☀️" : "🌙"}
         </button>
       </div>
-    </nav>
+    </header>
   );
 }
 
-/* ═══════════════════════════════════════════
-   HERO SECTION
-   ═══════════════════════════════════════════ */
-
-function HeroSection() {
+/* ══════════════════════════════════════════════
+   HERO
+   ══════════════════════════════════════════════ */
+function Hero() {
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-      {/* Grid background */}
-      <div className="absolute inset-0 grid-bg" />
+    <section className="relative min-h-[100svh] flex items-center justify-center overflow-hidden" style={{ background: "var(--bg-0)" }}>
+      {/* gradient orbs */}
+      <div className="pointer-events-none absolute inset-0">
+        <div
+          className="absolute w-[520px] h-[520px] rounded-full blur-[120px] opacity-[.15]"
+          style={{ background: "var(--green)", top: "20%", left: "15%", animation: "float-a 8s ease-in-out infinite" }}
+        />
+        <div
+          className="absolute w-[400px] h-[400px] rounded-full blur-[100px] opacity-[.10]"
+          style={{ background: "var(--cyan)", bottom: "10%", right: "10%", animation: "float-b 10s ease-in-out infinite" }}
+        />
+      </div>
 
-      {/* Radial gradient overlay */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(ellipse 60% 50% at 50% 50%, var(--accent-glow), transparent)",
-        }}
-      />
-
-      <div className="relative z-10 max-w-4xl mx-auto px-6 text-center">
-        <FadeIn>
-          <div
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs tracking-wide mb-8"
-            style={{
-              background: "var(--accent-dim)",
-              color: "var(--accent)",
-              border: "1px solid rgba(34,197,94,0.2)",
-            }}
+      <div className="relative z-10 mx-auto max-w-3xl px-6 text-center pt-14">
+        <Reveal>
+          <span
+            className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-[13px] font-medium"
+            style={{ background: "var(--green-soft)", color: "var(--green)", border: "1px solid var(--green-soft)" }}
           >
-            <span
-              className="w-1.5 h-1.5 rounded-full animate-pulse-dot"
-              style={{ background: "var(--accent)" }}
-            />
-            2026년 3월 — EXEM AI Initiative
-          </div>
-        </FadeIn>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--green)", animation: "pulse-dot 2s ease-in-out infinite" }} />
+            2026.03 — EXEM AI Initiative
+          </span>
+        </Reveal>
 
-        <FadeIn delay={0.1}>
-          <h1
-            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-light leading-tight tracking-tight"
-            style={{ letterSpacing: "-0.04em" }}
-          >
+        <Reveal delay={0.08}>
+          <h1 className="mt-8 text-[clamp(2.25rem,6vw,4.5rem)] font-semibold leading-[1.1] tracking-[-0.035em]">
             일하는 방식이
             <br />
-            <span style={{ color: "var(--accent)" }}>바뀌고 있습니다</span>
+            <span style={{ color: "var(--green)" }}>바뀌고 있습니다</span>
           </h1>
-        </FadeIn>
+        </Reveal>
 
-        <FadeIn delay={0.2}>
-          <p
-            className="mt-6 text-base sm:text-lg md:text-xl max-w-2xl mx-auto leading-relaxed"
-            style={{ color: "var(--text-secondary)" }}
-          >
+        <Reveal delay={0.16}>
+          <p className="mt-6 text-[clamp(1rem,2.2vw,1.25rem)] leading-relaxed" style={{ color: "var(--text-1)" }}>
             AI는 더 이상 개발자만의 도구가 아닙니다.
-            <br className="hidden sm:block" />
-            지금 이 순간, 전 세계 비전공자들이 AI로 업무를 바꾸고 있습니다.
+            <br />
+            전 세계 비전공자들이 AI로 업무를 바꾸고 있습니다.
           </p>
-        </FadeIn>
+        </Reveal>
 
-        <FadeIn delay={0.3}>
-          <p className="mt-4 text-sm" style={{ color: "var(--text-dim)" }}>
+        <Reveal delay={0.24}>
+          <p className="mt-3 text-sm" style={{ color: "var(--text-2)" }}>
             EXEM은 기술을 만드는 회사입니다. 가장 먼저 활용할 수 있습니다.
           </p>
-        </FadeIn>
+        </Reveal>
 
-        {/* Scroll indicator */}
-        <FadeIn delay={0.5}>
-          <div className="mt-16 flex flex-col items-center gap-2 animate-scroll-hint">
-            <span
-              className="text-xs tracking-widest uppercase"
-              style={{ color: "var(--text-dim)" }}
-            >
-              Scroll
-            </span>
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              style={{ color: "var(--text-dim)" }}
-            >
-              <path d="M10 4 L10 16 M5 11 L10 16 L15 11" />
-            </svg>
+        <Reveal delay={0.36}>
+          <div className="mt-20 flex flex-col items-center gap-1" style={{ color: "var(--text-3)", animation: "scroll-bounce 2.4s ease-in-out infinite" }}>
+            <span className="text-[11px] tracking-[.15em] uppercase">Scroll</span>
+            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 5l6 6 6-6" /></svg>
           </div>
-        </FadeIn>
+        </Reveal>
       </div>
     </section>
   );
 }
 
-/* ═══════════════════════════════════════════
+/* ══════════════════════════════════════════════
    METRIC CARD
-   ═══════════════════════════════════════════ */
-
-function MetricCard({
-  metric,
-  index,
-}: {
-  metric: (typeof METRICS)[0];
-  index: number;
-}) {
-  const { ref, value } = useCountUp(metric.value, 2000 + index * 200);
-
-  const colorKey = metric.color.replace("var(--", "").replace(")", "");
-  const dimVar = `var(--${colorKey}-dim)`;
-
+   ══════════════════════════════════════════════ */
+function MetricCard({ m, i }: { m: (typeof METRICS)[0]; i: number }) {
+  const { ref, v } = useCountUp(m.value, 1800 + i * 150);
   return (
-    <FadeIn delay={index * 0.08}>
-      <div className="dashboard-card p-5 sm:p-6 flex flex-col gap-3 h-full">
-        {/* Header: change badge */}
+    <Reveal delay={i * 0.06} className="h-full">
+      <div
+        className="relative h-full rounded-xl p-5 flex flex-col gap-4 overflow-hidden transition-colors"
+        style={{ background: "var(--bg-2)", border: "1px solid var(--border-0)" }}
+      >
+        {/* top row: delta + sparkline */}
         <div className="flex items-center justify-between">
-          <span
-            className="text-[10px] sm:text-xs font-medium px-2 py-0.5 rounded"
-            style={{
-              background: dimVar,
-              color: metric.color,
-            }}
-          >
-            {metric.change}
+          <span className="text-[11px] font-semibold rounded-md px-2 py-0.5" style={{ background: m.soft, color: m.color }}>
+            {m.delta}
           </span>
-          <Sparkline
-            data={metric.sparkData}
-            color={metric.color}
-            width={64}
-            height={24}
-          />
+          <Spark data={m.spark} color={m.color} />
         </div>
 
-        {/* Value */}
+        {/* big number */}
         <div className="flex items-baseline gap-1">
-          <span
-            ref={ref}
-            className="text-3xl sm:text-4xl font-light tabular-nums"
-            style={{ letterSpacing: "-0.03em" }}
-          >
-            {value.toLocaleString()}
-          </span>
-          <span
-            className="text-lg sm:text-xl font-light"
-            style={{ color: "var(--text-secondary)" }}
-          >
-            {metric.suffix}
-          </span>
+          <span ref={ref} className="text-[2.5rem] leading-none font-bold tabular-nums tracking-tight">{v.toLocaleString()}</span>
+          <span className="text-lg font-medium" style={{ color: "var(--text-2)" }}>{m.unit}</span>
         </div>
 
-        {/* Label */}
-        <div>
-          <p className="text-sm font-medium">{metric.label}</p>
-          <p
-            className="text-xs mt-0.5"
-            style={{ color: "var(--text-dim)" }}
-          >
-            {metric.sub}
-          </p>
+        {/* label */}
+        <div className="mt-auto">
+          <p className="text-sm font-medium" style={{ color: "var(--text-0)" }}>{m.label}</p>
+          <p className="text-[12px] mt-0.5" style={{ color: "var(--text-2)" }}>{m.note}</p>
         </div>
+
+        {/* colored left accent */}
+        <div className="absolute left-0 top-4 bottom-4 w-[3px] rounded-r-full" style={{ background: m.color, opacity: 0.5 }} />
       </div>
-    </FadeIn>
+    </Reveal>
   );
 }
 
-/* ═══════════════════════════════════════════
-   TRENDS DASHBOARD SECTION
-   ═══════════════════════════════════════════ */
-
-function TrendsSection() {
+/* ══════════════════════════════════════════════
+   TRENDS SECTION
+   ══════════════════════════════════════════════ */
+function Trends() {
   return (
-    <section className="py-20 sm:py-28 md:py-32 px-6">
-      <div className="max-w-6xl mx-auto">
-        <FadeIn>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-            <h2
-              className="text-2xl sm:text-3xl md:text-4xl font-light"
-              style={{ letterSpacing: "-0.03em" }}
-            >
-              지금, 세상은
-            </h2>
-            <div
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] tracking-wider uppercase w-fit"
-              style={{
-                background: "var(--accent-dim)",
-                color: "var(--accent)",
-              }}
-            >
-              <span
-                className="w-1.5 h-1.5 rounded-full animate-pulse-dot"
-                style={{ background: "var(--accent)" }}
-              />
-              Live — 2026.03
-            </div>
-          </div>
-        </FadeIn>
-
-        <FadeIn delay={0.1}>
-          <p
-            className="text-sm sm:text-base max-w-xl mb-10 sm:mb-14"
-            style={{ color: "var(--text-secondary)" }}
-          >
-            이건 먼 미래가 아닙니다. 지금 이 순간 일어나고 있는 변화입니다.
-          </p>
-        </FadeIn>
-
-        {/* Dashboard frame */}
-        <div
-          className="rounded-2xl p-3 sm:p-4"
-          style={{
-            background: "var(--bg-elevated)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          {/* Dashboard title bar */}
-          <div
-            className="flex items-center gap-3 px-4 py-2.5 rounded-lg mb-3 sm:mb-4"
-            style={{ background: "var(--bg-card)" }}
-          >
-            <div className="flex gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
-              <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
-              <span className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
-            </div>
+    <section className="section-alt py-20 sm:py-28 px-6">
+      <div className="mx-auto max-w-[1120px]">
+        <Reveal>
+          <div className="flex flex-wrap items-center gap-3 mb-2">
+            <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">지금, 세상은</h2>
             <span
-              className="text-[11px] tracking-wide"
-              style={{ color: "var(--text-dim)" }}
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold tracking-wider uppercase"
+              style={{ background: "var(--green-soft)", color: "var(--green)" }}
             >
-              AI TREND DASHBOARD — EXEM MONITORING
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--green)", animation: "pulse-dot 2s ease-in-out infinite" }} />
+              Live 2026.03
+            </span>
+          </div>
+        </Reveal>
+
+        <Reveal delay={0.06}>
+          <p className="text-base mb-12" style={{ color: "var(--text-1)" }}>
+            먼 미래가 아닙니다. 지금 이 순간 일어나고 있는 변화입니다.
+          </p>
+        </Reveal>
+
+        {/* dashboard frame */}
+        <div className="rounded-2xl overflow-hidden" style={{ background: "var(--bg-0)", border: "1px solid var(--border-0)" }}>
+          {/* title bar */}
+          <div className="flex items-center gap-3 px-5 py-3" style={{ borderBottom: "1px solid var(--border-0)" }}>
+            <div className="flex gap-[6px]">
+              <span className="w-[10px] h-[10px] rounded-full" style={{ background: "#ff5f57" }} />
+              <span className="w-[10px] h-[10px] rounded-full" style={{ background: "#febc2e" }} />
+              <span className="w-[10px] h-[10px] rounded-full" style={{ background: "#28c840" }} />
+            </div>
+            <span className="text-[11px] font-medium tracking-wide" style={{ color: "var(--text-2)" }}>
+              AI Trend Dashboard — EXEM Monitoring
             </span>
           </div>
 
-          {/* Metrics grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            {METRICS.map((metric, i) => (
-              <MetricCard key={metric.label} metric={metric} index={i} />
+          {/* cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[1px]" style={{ background: "var(--border-0)" }}>
+            {METRICS.map((m, i) => (
+              <div key={m.label} style={{ background: "var(--bg-0)" }}>
+                <div className="p-1">
+                  <MetricCard m={m} i={i} />
+                </div>
+              </div>
             ))}
           </div>
         </div>
 
-        {/* Attribution */}
-        <FadeIn delay={0.4}>
-          <p
-            className="text-[11px] mt-4 text-right"
-            style={{ color: "var(--text-dim)" }}
-          >
-            출처: Anthropic, SemiAnalysis, VentureBeat, Pragmatic Engineer
-            (2026.03)
+        <Reveal delay={0.3}>
+          <p className="text-[11px] mt-3 text-right" style={{ color: "var(--text-3)" }}>
+            출처: Anthropic · SemiAnalysis · VentureBeat · Pragmatic Engineer (2026.03)
           </p>
-        </FadeIn>
+        </Reveal>
       </div>
     </section>
   );
 }
 
-/* ═══════════════════════════════════════════
-   EXEM POSITION SECTION
-   ═══════════════════════════════════════════ */
-
-function PositionSection() {
-  const points = [
-    {
-      title: "IT 모니터링 전문 기업",
-      desc: "20년 이상 데이터를 다뤄온 기술 기업. AI를 가장 잘 이해하고 활용할 수 있는 위치에 있습니다.",
-    },
-    {
-      title: "비전공자도 활용하는 시대",
-      desc: "의료 IT 기업 Epic에서는 Claude Code 사용자의 절반 이상이 비개발 직군입니다. 기술 배경과 무관합니다.",
-    },
-    {
-      title: "글로벌 기업이 먼저 움직이고 있다",
-      desc: "Microsoft는 자사 Copilot을 판매하면서도 내부적으로 Claude Code를 도입했습니다.",
-    },
+/* ══════════════════════════════════════════════
+   POSITION SECTION
+   ══════════════════════════════════════════════ */
+function Position() {
+  const items = [
+    { icon: "🏢", title: "IT 모니터링 전문 기업", desc: "20년 이상 데이터를 다뤄온 기술 기업.\nAI를 가장 잘 이해하고 활용할 수 있는 위치." },
+    { icon: "👩‍💼", title: "비전공자도 활용하는 시대", desc: "Epic(의료 IT)에서 Claude Code 사용자의\n절반 이상이 비개발 직군입니다." },
+    { icon: "🌍", title: "글로벌 기업이 먼저 움직이는 중", desc: "Microsoft는 자사 Copilot을 판매하면서도\n내부적으로 Claude Code를 도입했습니다." },
   ];
 
   return (
-    <section className="py-20 sm:py-28 md:py-32 px-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-          {/* Left: Text */}
-          <div>
-            <FadeIn>
-              <span
-                className="text-xs tracking-widest uppercase"
-                style={{ color: "var(--accent)" }}
-              >
-                EXEM&apos;s Position
-              </span>
-            </FadeIn>
+    <section className="py-20 sm:py-28 px-6" style={{ background: "var(--bg-0)" }}>
+      <div className="mx-auto max-w-[1120px]">
+        <Reveal>
+          <p className="text-[13px] font-semibold tracking-wider uppercase" style={{ color: "var(--green)" }}>EXEM&apos;s Position</p>
+        </Reveal>
+        <Reveal delay={0.06}>
+          <h2 className="mt-3 text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight leading-snug">
+            우리는 기술을 만드는 회사입니다.
+            <br />
+            <span style={{ color: "var(--text-1)" }}>가장 잘 활용할 수 있는 위치에 있습니다.</span>
+          </h2>
+        </Reveal>
+        <Reveal delay={0.1}>
+          <p className="mt-4 text-base max-w-2xl leading-relaxed" style={{ color: "var(--text-1)" }}>
+            EXEM은 2001년부터 DB, APM, 인프라 모니터링 소프트웨어를 만들어온 IT 전문 기업입니다.
+            데이터를 수집하고, 분석하고, 시각화하는 것이 우리의 본업입니다.
+          </p>
+        </Reveal>
 
-            <FadeIn delay={0.1}>
-              <h2
-                className="text-2xl sm:text-3xl md:text-4xl font-light mt-4 leading-snug"
-                style={{ letterSpacing: "-0.03em" }}
-              >
-                우리는 기술을 만드는 회사입니다.
-                <br />
-                <span style={{ color: "var(--text-secondary)" }}>
-                  가장 잘 활용할 수 있는 위치에 있습니다.
-                </span>
-              </h2>
-            </FadeIn>
-
-            <FadeIn delay={0.15}>
-              <p
-                className="mt-6 text-sm sm:text-base leading-relaxed"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                EXEM은 2001년부터 DB, APM, 인프라 모니터링 소프트웨어를 만들어온
-                IT 전문 기업입니다. 데이터를 수집하고, 분석하고, 시각화하는 것이
-                우리의 본업입니다. AI는 그 연장선에 있습니다.
-              </p>
-            </FadeIn>
-
-            <div className="mt-10 flex flex-col gap-4">
-              {points.map((point, i) => (
-                <FadeIn key={point.title} delay={0.2 + i * 0.08}>
-                  <div
-                    className="flex gap-4 p-4 rounded-xl transition-colors"
-                    style={{
-                      background: "var(--bg-elevated)",
-                      border: "1px solid var(--border)",
-                    }}
-                  >
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm font-medium"
-                      style={{
-                        background: "var(--accent-dim)",
-                        color: "var(--accent)",
-                      }}
-                    >
-                      {i + 1}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">{point.title}</p>
-                      <p
-                        className="text-xs mt-1 leading-relaxed"
-                        style={{ color: "var(--text-secondary)" }}
-                      >
-                        {point.desc}
-                      </p>
-                    </div>
-                  </div>
-                </FadeIn>
-              ))}
-            </div>
-          </div>
-
-          {/* Right: Quote card */}
-          <FadeIn delay={0.2}>
-            <div
-              className="relative p-8 sm:p-10 rounded-2xl"
-              style={{
-                background: "var(--bg-elevated)",
-                border: "1px solid var(--border)",
-              }}
-            >
+        {/* 3 cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-12">
+          {items.map((it, i) => (
+            <Reveal key={it.title} delay={0.14 + i * 0.06}>
               <div
-                className="absolute -top-3 left-8 px-3 py-1 rounded-full text-[10px] tracking-wider uppercase"
-                style={{
-                  background: "var(--bg)",
-                  color: "var(--text-dim)",
-                  border: "1px solid var(--border)",
-                }}
+                className="rounded-xl p-6 h-full flex flex-col gap-3"
+                style={{ background: "var(--bg-1)", border: "1px solid var(--border-0)" }}
               >
-                Anthropic CEO
+                <span className="text-2xl">{it.icon}</span>
+                <p className="text-[15px] font-semibold">{it.title}</p>
+                <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: "var(--text-1)" }}>{it.desc}</p>
               </div>
-
-              <blockquote
-                className="text-lg sm:text-xl md:text-2xl font-light leading-relaxed mt-4"
-                style={{ letterSpacing: "-0.02em" }}
-              >
-                &ldquo;2025년 Claude가
-                <span style={{ color: "var(--accent)" }}>
-                  {" "}
-                  개발자의 업무
-                </span>
-                를 바꿨다면, 2026년은
-                <span style={{ color: "var(--cyan)" }}>
-                  {" "}
-                  모든 지식 노동자의 업무
-                </span>
-                를 바꿀 것입니다.&rdquo;
-              </blockquote>
-
-              <p
-                className="mt-6 text-sm"
-                style={{ color: "var(--text-dim)" }}
-              >
-                Dario Amodei, Anthropic CEO
-              </p>
-
-              {/* Decorative glow */}
-              <div
-                className="absolute -z-10 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] rounded-full blur-3xl opacity-30"
-                style={{
-                  background:
-                    "radial-gradient(circle, var(--accent-glow), transparent 70%)",
-                }}
-              />
-            </div>
-          </FadeIn>
+            </Reveal>
+          ))}
         </div>
+
+        {/* quote */}
+        <Reveal delay={0.3}>
+          <blockquote
+            className="mt-12 rounded-xl p-8 relative"
+            style={{ background: "var(--bg-1)", border: "1px solid var(--border-0)" }}
+          >
+            <div className="absolute left-8 -top-3 px-3 py-1 rounded-full text-[10px] font-semibold tracking-wider uppercase"
+              style={{ background: "var(--bg-0)", color: "var(--text-2)", border: "1px solid var(--border-0)" }}>
+              Anthropic CEO
+            </div>
+            <p className="text-lg sm:text-xl lg:text-2xl font-medium leading-relaxed tracking-tight mt-2">
+              &ldquo;2025년 Claude가 <span style={{ color: "var(--green)" }}>개발자의 업무</span>를 바꿨다면,
+              {" "}2026년은 <span style={{ color: "var(--cyan)" }}>모든 지식 노동자의 업무</span>를 바꿀 것입니다.&rdquo;
+            </p>
+            <p className="mt-4 text-sm" style={{ color: "var(--text-2)" }}>— Dario Amodei</p>
+          </blockquote>
+        </Reveal>
       </div>
     </section>
   );
 }
 
-/* ═══════════════════════════════════════════
+/* ══════════════════════════════════════════════
    CLAUDE CODE SECTION
-   ═══════════════════════════════════════════ */
+   ══════════════════════════════════════════════ */
+function MockupLine({ l }: { l: { t: string; v: string } }) {
+  switch (l.t) {
+    case "title":
+      return <p className="text-[15px] font-semibold mb-1">{l.v}</p>;
+    case "meta":
+      return <p className="text-[12px] mb-4" style={{ color: "var(--text-2)" }}>{l.v}</p>;
+    case "head":
+      return <p className="text-[13px] font-semibold mt-4 mb-1.5" style={{ color: "var(--text-1)" }}>{l.v}</p>;
+    case "item":
+      return (
+        <div className="flex gap-2 py-[3px] text-sm" style={{ color: "var(--text-1)" }}>
+          <span style={{ color: "var(--text-2)" }}>·</span>
+          <span>{l.v}</span>
+        </div>
+      );
+    case "check":
+      return (
+        <div className="flex gap-2 py-[3px] text-sm" style={{ color: "var(--text-1)" }}>
+          <span style={{ color: "var(--green)" }}>✓</span>
+          <span>{l.v}</span>
+        </div>
+      );
+    case "highlight":
+      return (
+        <div className="inline-block rounded-lg px-3 py-1.5 text-sm font-semibold my-1" style={{ background: "var(--green-soft)", color: "var(--green)" }}>
+          {l.v}
+        </div>
+      );
+    default:
+      return <p className="text-sm" style={{ color: "var(--text-1)" }}>{l.v}</p>;
+  }
+}
 
-function ClaudeCodeSection() {
-  const [activeTab, setActiveTab] = useState(0);
-
+function ClaudeCode() {
+  const [tab, setTab] = useState(0);
   return (
-    <section className="py-20 sm:py-28 md:py-32 px-6">
-      <div className="max-w-6xl mx-auto">
-        <FadeIn>
-          <span
-            className="text-xs tracking-widest uppercase"
-            style={{ color: "var(--cyan)" }}
-          >
-            Claude Code
-          </span>
-        </FadeIn>
-
-        <FadeIn delay={0.1}>
-          <h2
-            className="text-2xl sm:text-3xl md:text-4xl font-light mt-4 leading-snug"
-            style={{ letterSpacing: "-0.03em" }}
-          >
+    <section className="section-alt py-20 sm:py-28 px-6">
+      <div className="mx-auto max-w-[1120px]">
+        <Reveal>
+          <p className="text-[13px] font-semibold tracking-wider uppercase" style={{ color: "var(--cyan)" }}>Claude Code</p>
+        </Reveal>
+        <Reveal delay={0.06}>
+          <h2 className="mt-3 text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight leading-snug">
             코딩이 아닙니다.
             <br />
-            <span style={{ color: "var(--text-secondary)" }}>
-              AI에게 일을 시키는 새로운 방식입니다.
-            </span>
+            <span style={{ color: "var(--text-1)" }}>AI에게 일을 시키는 새로운 방식입니다.</span>
           </h2>
-        </FadeIn>
-
-        <FadeIn delay={0.15}>
-          <p
-            className="mt-4 text-sm sm:text-base max-w-xl"
-            style={{ color: "var(--text-secondary)" }}
-          >
-            Claude Code는 대화로 업무를 처리합니다. 코드를 쓰는 도구가 아니라,
-            여러분의 일을 대신 해주는 AI 동료입니다.
+        </Reveal>
+        <Reveal delay={0.1}>
+          <p className="mt-4 text-base max-w-xl" style={{ color: "var(--text-1)" }}>
+            코드를 쓰는 도구가 아니라, 한국어로 대화하면 업무를 처리해주는 AI 동료입니다.
           </p>
-        </FadeIn>
+        </Reveal>
 
-        {/* Use case tabs + mockup */}
-        <FadeIn delay={0.2}>
-          <div className="mt-10 sm:mt-14">
-            {/* Tabs */}
-            <div className="flex gap-2 sm:gap-3 mb-6 overflow-x-auto pb-2 -mx-6 px-6 sm:mx-0 sm:px-0">
-              {USE_CASES.map((uc, i) => (
+        <Reveal delay={0.16}>
+          <div className="mt-10">
+            {/* tabs */}
+            <div className="flex gap-2 overflow-x-auto pb-3 -mx-6 px-6 sm:mx-0 sm:px-0">
+              {CASES.map((c, i) => (
                 <button
-                  key={uc.title}
-                  onClick={() => setActiveTab(i)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm whitespace-nowrap transition-all cursor-pointer shrink-0"
+                  key={c.tab}
+                  onClick={() => setTab(i)}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all cursor-pointer shrink-0",
+                  )}
                   style={{
-                    background:
-                      activeTab === i ? "var(--bg-card)" : "transparent",
-                    border:
-                      activeTab === i
-                        ? "1px solid var(--border-hover)"
-                        : "1px solid var(--border)",
-                    color:
-                      activeTab === i
-                        ? "var(--text)"
-                        : "var(--text-secondary)",
+                    background: tab === i ? "var(--bg-2)" : "transparent",
+                    border: tab === i ? "1px solid var(--border-1)" : "1px solid transparent",
+                    color: tab === i ? "var(--text-0)" : "var(--text-2)",
                   }}
                 >
-                  <span>{uc.icon}</span>
-                  {uc.title}
+                  <span>{c.icon}</span>{c.tab}
                 </button>
               ))}
             </div>
 
-            {/* Device mockup */}
-            <div
-              className="rounded-2xl overflow-hidden"
-              style={{
-                background: "var(--bg-elevated)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              {/* Browser chrome */}
-              <div
-                className="flex items-center gap-3 px-4 py-3"
-                style={{
-                  background: "var(--bg-card)",
-                  borderBottom: "1px solid var(--border)",
-                }}
-              >
-                <div className="flex gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
+            {/* browser mockup */}
+            <div className="rounded-xl overflow-hidden mt-2" style={{ background: "var(--bg-0)", border: "1px solid var(--border-0)" }}>
+              {/* chrome */}
+              <div className="flex items-center gap-3 px-5 h-10" style={{ background: "var(--bg-2)", borderBottom: "1px solid var(--border-0)" }}>
+                <div className="flex gap-[6px]">
+                  <span className="w-[10px] h-[10px] rounded-full" style={{ background: "#ff5f57" }} />
+                  <span className="w-[10px] h-[10px] rounded-full" style={{ background: "#febc2e" }} />
+                  <span className="w-[10px] h-[10px] rounded-full" style={{ background: "#28c840" }} />
                 </div>
                 <div className="flex-1 flex justify-center">
-                  <div
-                    className="px-4 py-1 rounded-md text-[11px]"
-                    style={{
-                      background: "var(--bg)",
-                      color: "var(--text-dim)",
-                    }}
-                  >
-                    Claude Code — {USE_CASES[activeTab].title}
-                  </div>
+                  <span className="text-[11px] px-4 py-0.5 rounded" style={{ background: "var(--bg-0)", color: "var(--text-2)" }}>
+                    Claude Code — {CASES[tab].tab}
+                  </span>
                 </div>
-                <div className="w-[52px]" />
+                <div className="w-12" />
               </div>
 
-              {/* Content area */}
-              <div className="p-5 sm:p-8 md:p-10 min-h-[340px] sm:min-h-[400px]">
+              {/* content */}
+              <div className="p-6 sm:p-8">
                 <AnimatePresence mode="wait">
                   <motion.div
-                    key={activeTab}
-                    initial={{ opacity: 0, y: 10 }}
+                    key={tab}
+                    initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.3 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.25 }}
                   >
-                    <p
-                      className="text-xs mb-4"
-                      style={{ color: "var(--text-dim)" }}
-                    >
-                      {USE_CASES[activeTab].desc}
-                    </p>
-
-                    <div
-                      className="rounded-xl p-4 sm:p-6 font-mono text-xs sm:text-sm leading-relaxed overflow-x-auto"
-                      style={{
-                        background: "var(--bg-card)",
-                        border: "1px solid var(--border)",
-                        color: "var(--text-secondary)",
-                      }}
-                    >
-                      {USE_CASES[activeTab].mockup.map((line, i) => (
-                        <div key={i} className={line === "" ? "h-3" : ""}>
-                          {line}
-                        </div>
-                      ))}
+                    <p className="text-xs font-medium mb-5" style={{ color: "var(--text-2)" }}>{CASES[tab].title}</p>
+                    <div className="rounded-lg p-5" style={{ background: "var(--bg-1)", border: "1px solid var(--border-0)" }}>
+                      {CASES[tab].lines.map((l, i) => <MockupLine key={i} l={l} />)}
                     </div>
                   </motion.div>
                 </AnimatePresence>
               </div>
             </div>
 
-            {/* Bottom message */}
-            <FadeIn delay={0.3}>
-              <p
-                className="mt-6 text-center text-sm"
-                style={{ color: "var(--text-dim)" }}
-              >
-                터미널이나 코드를 몰라도 됩니다. 한국어로 대화하면 AI가
-                처리합니다.
-              </p>
-            </FadeIn>
+            <p className="mt-5 text-center text-sm" style={{ color: "var(--text-2)" }}>
+              터미널이나 코드를 몰라도 됩니다. 대화만 하면 AI가 처리합니다.
+            </p>
           </div>
-        </FadeIn>
+        </Reveal>
       </div>
     </section>
   );
 }
 
-/* ═══════════════════════════════════════════
-   CURRICULUM CTA SECTION
-   ═══════════════════════════════════════════ */
-
-function CurriculumSection() {
-  const days = [
-    { day: 0, label: "오리엔테이션", color: "var(--accent)" },
-    { day: 1, label: "AI에게 잘 시키는 법", color: "var(--accent)" },
-    { day: 2, label: "내 업무를 AI로", color: "var(--cyan)" },
-    { day: 3, label: "도구 연결하기", color: "var(--cyan)" },
-    { day: 4, label: "자동화하기", color: "var(--amber)" },
-    { day: 5, label: "졸업", color: "var(--amber)" },
-  ];
-
+/* ══════════════════════════════════════════════
+   CURRICULUM SECTION
+   ══════════════════════════════════════════════ */
+function Curriculum() {
   return (
-    <section className="py-20 sm:py-28 md:py-32 px-6">
-      <div className="max-w-4xl mx-auto text-center">
-        <FadeIn>
-          <span
-            className="text-xs tracking-widest uppercase"
-            style={{ color: "var(--accent)" }}
-          >
-            EXEM AI Curriculum
-          </span>
-        </FadeIn>
-
-        <FadeIn delay={0.1}>
-          <h2
-            className="text-3xl sm:text-4xl md:text-5xl font-light mt-4"
-            style={{ letterSpacing: "-0.03em" }}
-          >
-            <span style={{ color: "var(--accent)" }}>5일</span>이면 충분합니다
+    <section className="py-20 sm:py-28 px-6" style={{ background: "var(--bg-0)" }}>
+      <div className="mx-auto max-w-[1120px] text-center">
+        <Reveal>
+          <p className="text-[13px] font-semibold tracking-wider uppercase" style={{ color: "var(--green)" }}>EXEM AI Curriculum</p>
+        </Reveal>
+        <Reveal delay={0.06}>
+          <h2 className="mt-3 text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight">
+            <span style={{ color: "var(--green)" }}>5일</span>이면 충분합니다
           </h2>
-        </FadeIn>
-
-        <FadeIn delay={0.15}>
-          <p
-            className="mt-4 text-sm sm:text-base max-w-lg mx-auto"
-            style={{ color: "var(--text-secondary)" }}
-          >
+        </Reveal>
+        <Reveal delay={0.1}>
+          <p className="mt-4 text-base max-w-md mx-auto" style={{ color: "var(--text-1)" }}>
             비전공자를 위해 설계된 실전 AI 커리큘럼.
             <br />
-            하루 1시간, 5일이면 AI로 업무를 바꿀 수 있습니다.
+            하루 1시간이면 AI로 업무를 바꿀 수 있습니다.
           </p>
-        </FadeIn>
+        </Reveal>
 
-        {/* Day badges */}
-        <FadeIn delay={0.2}>
-          <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mt-10 sm:mt-14">
-            {days.map((d, i) => (
+        {/* day timeline */}
+        <Reveal delay={0.16}>
+          <div className="mt-12 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {DAYS.map((d, i) => (
               <motion.div
-                key={d.day}
-                initial={{ opacity: 0, scale: 0.8 }}
-                whileInView={{ opacity: 1, scale: 1 }}
+                key={d.n}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{
-                  delay: 0.3 + i * 0.06,
-                  duration: 0.4,
-                  ease: [0.16, 1, 0.3, 1],
-                }}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm"
-                style={{
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border)",
-                }}
+                transition={{ delay: 0.2 + i * 0.05, duration: 0.5, ease: [0.25, 1, 0.5, 1] }}
+                className="rounded-xl p-4 text-left"
+                style={{ background: "var(--bg-1)", border: "1px solid var(--border-0)" }}
               >
-                <span
-                  className="w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-medium"
+                <div
+                  className="w-8 h-8 rounded-lg grid place-items-center text-sm font-bold mb-3"
                   style={{
-                    background: d.color,
-                    color: "var(--bg)",
+                    background: i < 2 ? "var(--green-soft)" : i < 4 ? "var(--cyan-soft)" : "var(--amber-soft)",
+                    color: i < 2 ? "var(--green)" : i < 4 ? "var(--cyan)" : "var(--amber)",
                   }}
                 >
-                  {d.day}
-                </span>
-                <span
-                  className="hidden sm:inline"
-                  style={{ color: "var(--text-secondary)" }}
-                >
-                  {d.label}
-                </span>
+                  {d.n}
+                </div>
+                <p className="text-sm font-semibold leading-snug">{d.label}</p>
+                <p className="text-[12px] mt-1" style={{ color: "var(--text-2)" }}>{d.time}</p>
               </motion.div>
             ))}
           </div>
-        </FadeIn>
+        </Reveal>
 
-        {/* CTA Buttons */}
-        <FadeIn delay={0.35}>
-          <div className="mt-10 sm:mt-14 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+        {/* CTA */}
+        <Reveal delay={0.3}>
+          <div className="mt-12">
             <a
               href="https://exem-ai-curriculum-landing.vercel.app"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl text-sm font-medium transition-all hover:scale-[1.02] active:scale-[0.98]"
-              style={{
-                background: "var(--accent)",
-                color: "#000",
-              }}
+              className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl text-[15px] font-semibold transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              style={{ background: "var(--green)", color: "#000" }}
             >
               커리큘럼 시작하기
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M3 8h10M9 4l4 4-4 4" />
-              </svg>
+              <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 9h10M10 5l4 4-4 4" /></svg>
             </a>
           </div>
-        </FadeIn>
+        </Reveal>
       </div>
     </section>
   );
 }
 
-/* ═══════════════════════════════════════════
-   CLOSING SECTION
-   ═══════════════════════════════════════════ */
-
-function ClosingSection({ theme }: { theme: string }) {
+/* ══════════════════════════════════════════════
+   CLOSING
+   ══════════════════════════════════════════════ */
+function Closing({ theme }: { theme: string }) {
   return (
-    <section className="relative py-24 sm:py-32 md:py-40 px-6 overflow-hidden">
-      {/* Gradient background */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(ellipse 80% 60% at 50% 100%, var(--accent-glow), transparent)",
-        }}
-      />
+    <section className="relative py-24 sm:py-32 px-6 overflow-hidden" style={{ background: "var(--bg-0)" }}>
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute w-[600px] h-[300px] rounded-full blur-[140px] opacity-[.08] left-1/2 bottom-0 -translate-x-1/2" style={{ background: "var(--green)" }} />
+      </div>
 
-      <div className="relative z-10 max-w-3xl mx-auto text-center">
-        <FadeIn>
-          <h2
-            className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-light leading-tight"
-            style={{ letterSpacing: "-0.04em" }}
-          >
+      <div className="relative z-10 mx-auto max-w-2xl text-center">
+        <Reveal>
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight leading-tight">
             엑셈의 내일은,
             <br />
-            <span style={{ color: "var(--accent)" }}>오늘</span> 시작됩니다.
+            <span style={{ color: "var(--green)" }}>오늘</span> 시작됩니다.
           </h2>
-        </FadeIn>
-
-        <FadeIn delay={0.15}>
-          <p
-            className="mt-6 sm:mt-8 text-sm sm:text-base leading-relaxed max-w-lg mx-auto"
-            style={{ color: "var(--text-secondary)" }}
-          >
+        </Reveal>
+        <Reveal delay={0.1}>
+          <p className="mt-6 text-base leading-relaxed" style={{ color: "var(--text-1)" }}>
             두려워하지 마세요. 우리 모두 처음은 낯설었습니다.
             <br />
             하지만 시작한 사람만이 변화를 만듭니다.
           </p>
-        </FadeIn>
-
-        <FadeIn delay={0.25}>
-          <div
-            className="mt-12 pt-8"
-            style={{ borderTop: "1px solid var(--border)" }}
-          >
+        </Reveal>
+        <Reveal delay={0.2}>
+          <div className="mt-16 pt-6" style={{ borderTop: "1px solid var(--border-0)" }}>
             <Image
-              src={
-                theme === "dark"
-                  ? "/logos/Exem_logo_white.svg"
-                  : "/logos/Exem_logo_black.svg"
-              }
-              alt="EXEM"
-              width={64}
-              height={20}
-              className="mx-auto h-4 w-auto opacity-30"
+              src={theme === "dark" ? "/logos/Exem_logo_white.svg" : "/logos/Exem_logo_black.svg"}
+              alt="EXEM" width={56} height={16} className="mx-auto h-3.5 w-auto opacity-25"
             />
-            <p
-              className="mt-3 text-xs"
-              style={{ color: "var(--text-dim)" }}
-            >
-              &copy; 2026 EXEM. AI가 만드는 새로운 가능성.
-            </p>
+            <p className="mt-2 text-[12px]" style={{ color: "var(--text-3)" }}>&copy; 2026 EXEM</p>
           </div>
-        </FadeIn>
+        </Reveal>
       </div>
     </section>
   );
 }
 
-/* ═══════════════════════════════════════════
+/* ══════════════════════════════════════════════
    PAGE
-   ═══════════════════════════════════════════ */
-
+   ══════════════════════════════════════════════ */
 export default function Home() {
   const { theme, toggle } = useTheme();
-
   return (
     <>
       <Nav theme={theme} onToggle={toggle} />
       <main>
-        <HeroSection />
-        <TrendsSection />
-        <PositionSection />
-        <ClaudeCodeSection />
-        <CurriculumSection />
-        <ClosingSection theme={theme} />
+        <Hero />
+        <Trends />
+        <Position />
+        <ClaudeCode />
+        <Curriculum />
+        <Closing theme={theme} />
       </main>
     </>
   );
